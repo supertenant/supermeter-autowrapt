@@ -1,0 +1,1 @@
+import os, sys; ('supermeter' in os.environ.get('AUTOWRAPT_BOOTSTRAP', '') or os.environ.get('SUPERMETER_BOOTSTRAP', 'false').lower() in ('1', 'true', 't', 'y', 'yes')) and __import__('supermeter-autowrapt.bootstrap') and sys.modules['supermeter-autowrapt.bootstrap'].bootstrap()

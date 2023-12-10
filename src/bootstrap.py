@@ -4,7 +4,7 @@ be invoked from either a '.pth' file, or from a custom 'sitecustomize'
 module setup by the 'autowrapt' wrapper script.
 
 '''
-
+import sys
 import os
 import site
 
@@ -37,6 +37,8 @@ def register_bootstrap_functions():
 
     for name in os.environ.get('AUTOWRAPT_BOOTSTRAP', '').split(','):
         discover_post_import_hooks(name)
+    if os.environ.get('SUPERMETER_BOOTSTRAP', 'false').lower() in ('1', 'true', 't', 'y', 'yes'):
+        discover_post_import_hooks('supermeter')
 
 def _execsitecustomize_wrapper(wrapped):
     def _execsitecustomize(*args, **kwargs):
@@ -95,6 +97,12 @@ def bootstrap():
     # where to import it from. The addition of the directory which
     # contains wrapt may not yet have been done. We thus use a simple
     # function wrapper instead.
+
+    # If sitecustomize or usercustomize were already executed the wrappers
+    # below will not be called, so we need to call register_bootstrap_functions() immediately.
+    if 'sitecustomize' in sys.modules or 'usercustomize' in sys.modules:
+        register_bootstrap_functions()
+        return
 
     site.execsitecustomize = _execsitecustomize_wrapper(site.execsitecustomize)
     site.execusercustomize = _execusercustomize_wrapper(site.execusercustomize)
