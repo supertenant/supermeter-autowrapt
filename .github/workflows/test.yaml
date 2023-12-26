@@ -1,0 +1,32 @@
+name: Test Matrix
+
+on:
+  pull_request:
+    branches: [ "main", "develop" ]
+    paths-ignore: [ "LICENSE", "MANIFEST.in", "README.rst" ]
+
+  workflow_dispatch:
+    inputs:
+      tmate_on_failure:
+        description: Run tmate on failure
+        type: boolean
+        default: false
+        required: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['2.7', 'pypy2.7', '3.7', 'pypy3.7', '3.8', 'pypy3.8', '3.9', 'pypy3.9', '3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: LizardByte/setup-python-action@master
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Test Python ${{ matrix.python-version }}
+        run: python test/test_bootstrap.py
+      - name: Debug with tmate on failure
+        if: ${{ failure() && github.event.inputs.tmate_on_failure == 'true' }}
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+    

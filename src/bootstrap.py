@@ -1,20 +1,73 @@
-'''Provides the bootstrap functions to be invoked on Python interpreter
-startup to register any post import hook callback functions. These would
-be invoked from either a '.pth' file, or from a custom 'sitecustomize'
-module setup by the 'autowrapt' wrapper script.
-
+'''
+Provides the bootstrap functions to be invoked on Python interpreter
+startup to load supermeter on interpreter startup. This module is invoked from
+a '.pth' file.
 '''
 import sys
 import os
 import site
 
-_registered = False
+try:
+    import __builtin__
+    _builtin = __builtin__
+except ImportError:  # python 3
+    import importlib
+    _builtin = importlib
 
-def register_bootstrap_functions():
+# mark if we already bootstrapped supermeter.
+_bootstrapped = False
+# original __import__ function
+_original_import = None
+# if we can't restore the original __import__ because someone else already replaced it, we set this to True
+_import_hook_passthrough = False
+
+_debug = os.getenv("SUPERTENANT_SUPERMETER_AUTOWRAPT_DEBUG", "false").lower() in ("1", "true", "t", "y", "yes")
+def _log(msg):
+    sys.stderr.write("[supertenant-supermeter-autowrapt] DEBUG: %s\n" % msg)
+
+if _debug:
+    _log("bootstrap loaded")
+
+def can_bootstrap():
+    # a lot of modules depend on having sys.argv available, so we can't
+    # bootstrap until it's available by python.
+    # in cpython's initialization order, this comes before running the
+    # main script or module.
+    return hasattr(sys, "argv")
+
+
+def _import_hook(*args, **kwargs):
+    global _original_import, _import_hook_passthrough
+    if not _import_hook_passthrough:
+        if _builtin.__import__ == _import_hook:
+            _builtin.__import__ = _original_import
+        else:  # someone else has already replaced the import hook, so we can't remove outselves.
+            _import_hook_passthrough = True
+        bootstrap_supermeter()
+    if _debug:
+        _log("_import_hook: %s" % (args[0],))
+    return _original_import(*args, **kwargs)
+
+
+def maybe_bootstrap_supermeter():
+    if can_bootstrap():
+        bootstrap_supermeter()
+        return
+    # If we can't bootstrap now, we're still too early in the python interpreter
+    # initialization sequence. Since we're past sitecustomize or usercustomize,
+    # we have no other good place to hook into, so our best option is to hook
+    # into __import__ and check when it's safe to bootstrap.
+    # Since the python interpreter "imports" the module or script it executes,
+    # we should get called before.
+    global _original_import
+    _original_import = _builtin.__import__
+    _builtin.__import__ = _import_hook
+
+
+def bootstrap_supermeter():
     '''Discover and register all post import hooks named in the
-    'AUTOWRAPT_BOOTSTRAP' environment variable. The value of the
+    'AUTOWRAPT_BOOTSTRAP' environment variable or if SUPERMETER_BOOTSTRAP. The value of the
     environment variable must be a comma separated list.
-
     '''
 
     # This can be called twice if '.pth' file bootstrapping works and
@@ -22,23 +75,38 @@ def register_bootstrap_functions():
     # protect ourselves just in case it is called a second time as we
     # only want to force registration once.
 
-    global _registered
-
-    if _registered:
+    global _builtin, _bootstrapped
+    if _bootstrapped:
         return 
 
-    _registered = True
+    _bootstrapped = True
+
+    if _debug:
+        _log("bootstrap_supermeter")
 
     # It should be safe to import wrapt at this point as this code will
     # be executed after all Python module search directories have been
     # added to the module search path.
 
-    from wrapt import discover_post_import_hooks
+    load_supermeter = False
+    if "supermeter" in set(os.environ.get("AUTOWRAPT_BOOTSTRAP", "").split(",")):
+        load_supermeter = True
+    if os.environ.get("SUPERMETER_BOOTSTRAP", "false").lower() in ("1", "true", "t", "y", "yes"):
+        load_supermeter = True
 
-    for name in os.environ.get('AUTOWRAPT_BOOTSTRAP', '').split(','):
-        discover_post_import_hooks(name)
-    if os.environ.get('SUPERMETER_BOOTSTRAP', 'false').lower() in ('1', 'true', 't', 'y', 'yes'):
-        discover_post_import_hooks('supermeter')
+    if load_supermeter:
+        if _debug:
+            _log("bootstrap_supermeter import and run")
+        try:
+            supertenant = _builtin.__import__("supertenant.supermeter")
+            supertenant.supermeter._load()
+        except Exception as e:
+            sys.stderr.write("[supertenant-supermeter] FATAL: failed to auto-load, instrumentation will not be available.\n")
+            import traceback
+            traceback.print_exc()
+    else:
+        if _debug:
+            _log("bootstrap_supermeter NOT import and run")
 
 def _execsitecustomize_wrapper(wrapped):
     def _execsitecustomize(*args, **kwargs):
@@ -49,31 +117,30 @@ def _execsitecustomize_wrapper(wrapped):
             # In the case of 'usercustomize' module support being
             # disabled we must instead do our work here after the
             # 'sitecustomize' module has been loaded.
-
             if not site.ENABLE_USER_SITE:
-                register_bootstrap_functions()
+                maybe_bootstrap_supermeter()
 
     return _execsitecustomize
+
 
 def _execusercustomize_wrapper(wrapped):
     def _execusercustomize(*args, **kwargs):
         try:
             return wrapped(*args, **kwargs)
         finally:
-            register_bootstrap_functions()
+            maybe_bootstrap_supermeter()
 
     return _execusercustomize
+
 
 _patched = False
 
 def bootstrap():
-    '''Patches the 'site' module such that the bootstrap functions for
-    registering the post import hook callback functions are called as
-    the last thing done when initialising the Python interpreter. This
-    function would normally be called from the special '.pth' file.
-
     '''
-
+    Patches the 'site' module such that the bootstrap function is
+    called as the last thing done when initialising the Python interpreter.
+    This function would normally be called from the special '.pth' file.
+    '''
     global _patched
 
     if _patched:
@@ -98,10 +165,11 @@ def bootstrap():
     # contains wrapt may not yet have been done. We thus use a simple
     # function wrapper instead.
 
-    # If sitecustomize or usercustomize were already executed the wrappers
-    # below will not be called, so we need to call register_bootstrap_functions() immediately.
-    if 'sitecustomize' in sys.modules or 'usercustomize' in sys.modules:
-        register_bootstrap_functions()
+    # If sitecustomize or usercustomize were already executed, then the
+    # wrappers below will not be called, so we need to call 
+    # maybe_bootstrap_supermeter() immediately.
+    if "sitecustomize" in sys.modules or "usercustomize" in sys.modules:
+        maybe_bootstrap_supermeter()
         return
 
     site.execsitecustomize = _execsitecustomize_wrapper(site.execsitecustomize)

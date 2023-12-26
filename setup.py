@@ -3,7 +3,9 @@ import os
 
 from setuptools import setup
 
-
+# In newer debian-based systems, there's a dist-packages directory
+# where user packages get installed (and not site-packages), so we
+# want to put out .pth file there as well.
 def get_lib_dirs():
     dirs = []
     try:
@@ -21,7 +23,7 @@ def get_lib_dirs():
 
 setup_kwargs = dict(
     name = 'supermeter-autowrapt',
-    version = '1.1.5',
+    version = '1.1.6',
     description = 'Boostrap mechanism for monkey patches for supermeter.',
     author = 'SuperTenant Ltd.',
     author_email = 'info@supertenant.com',
