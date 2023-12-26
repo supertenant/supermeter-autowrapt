@@ -1,4 +1,3 @@
-import sys
 import os
 
 from setuptools import setup
@@ -21,9 +20,14 @@ def get_lib_dirs():
     return dirs
 
 
+def load_readme():
+    with open(os.path.join(os.path.dirname(__file__), 'README.rst'), "rt") as f:
+        return f.read()
+
+
 setup_kwargs = dict(
     name = 'supermeter-autowrapt',
-    version = '1.1.6',
+    version = '1.1.7',
     description = 'Boostrap mechanism for monkey patches for supermeter.',
     author = 'SuperTenant Ltd.',
     author_email = 'info@supertenant.com',
@@ -35,6 +39,9 @@ setup_kwargs = dict(
     data_files = [(d, ['supermeter-init.pth']) for d in get_lib_dirs()],
     entry_points = {},
     install_requires = ['wrapt>=1.10.4'],
+    long_description=load_readme(),
+    long_description_content_type='text/markdown',
+    platforms=['any']
 )
 
 setup(**setup_kwargs)
