@@ -60,8 +60,9 @@ def maybe_bootstrap_supermeter():
     # Since the python interpreter "imports" the module or script it executes,
     # we should get called before.
     global _original_import
-    _original_import = _builtin.__import__
-    _builtin.__import__ = _import_hook
+    if _original_import is None:
+        _original_import = _builtin.__import__
+        _builtin.__import__ = _import_hook
 
 
 def bootstrap_supermeter():
