@@ -1,6 +1,4 @@
-====================
-supermeter-autowrapt
-====================
+# supermeter-autowrapt
 
 A fork of autowrapt addressing the following:
 
