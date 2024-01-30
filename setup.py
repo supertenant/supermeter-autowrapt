@@ -4,7 +4,7 @@ from setuptools import setup
 
 # In newer debian-based systems, there's a dist-packages directory
 # where user packages get installed (and not site-packages), so we
-# want to put out .pth file there as well.
+# want to write our .pth file there as well.
 def get_lib_dirs():
     dirs = []
     try:
@@ -17,7 +17,7 @@ def get_lib_dirs():
     datalib = sysconfig.get_paths().get('data', '')
     if purelib and datalib and purelib.startswith(datalib):
         dirs.append(purelib[len(datalib) + 1:])
-    return dirs
+    return set(dirs)
 
 
 def load_readme():
