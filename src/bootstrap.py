@@ -38,14 +38,18 @@ def can_bootstrap():
 
 def _import_hook(*args, **kwargs):
     global _original_import, _import_hook_passthrough
-    if not _import_hook_passthrough:
-        if _builtin.__import__ == _import_hook:
-            _builtin.__import__ = _original_import
-        else:  # someone else has already replaced the import hook, so we can't remove outselves.
-            _import_hook_passthrough = True
-        bootstrap_supermeter()
     if _debug:
         _log("_import_hook: %s" % (args[0],))
+    if not _import_hook_passthrough and can_bootstrap():
+        if _builtin.__import__ == _import_hook:
+            _builtin.__import__ = _original_import
+            if _debug:
+                _log("_import_hook: removing hook")
+        else:  # someone else has already replaced the import hook, so we can't remove outselves.
+            if _debug:
+                _log("_import_hook: setting passthrough mode")
+            _import_hook_passthrough = True
+        bootstrap_supermeter()
     return _original_import(*args, **kwargs)
 
 
