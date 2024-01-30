@@ -27,7 +27,7 @@ def load_readme():
 
 setup_kwargs = dict(
     name = 'supermeter-autowrapt',
-    version = '1.1.8',
+    version = '1.1.9',
     description = 'Boostrap mechanism for monkey patches for supermeter.',
     author = 'SuperTenant Ltd.',
     author_email = 'info@supertenant.com',
